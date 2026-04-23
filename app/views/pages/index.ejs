@@ -9,9 +9,14 @@
 </head>
 
 <body>
-   <h1>Lista de tarefas a fazer - 3C</h1>
+   <h1><%= tituloLista %></h1>
 
     <button onclick="window.location='/cadastro'">Nova Tarefa</button>
+    <% if (exibindoEscondidas) { %>
+        <button onclick="window.location='/'">Ver tarefas visíveis</button>
+    <% } else { %>
+        <button onclick="window.location='/escondidas'">Ver tarefas escondidas</button>
+    <% } %>
 
     <br>
     <br>
@@ -28,7 +33,7 @@
     </thead>
     <tbody>
 <% if(Array.isArray(linhasTabela) && linhasTabela.length > 0){
-    let situacao = ["Cancelada", "Pendente","Iniciada","Finalizada","Em Atraso"];
+    let situacao = ["Cancelada", "Pendente","Iniciada","Finalizada","Em Atraso","Escondida"];
     
     linhasTabela.forEach((item)=>{
     %>
@@ -36,9 +41,16 @@
             <td><%= item.id_tarefa %></td>
             <td><%= item.nome_tarefa %></td>
             <td><%= moment(item.prazo_tarefa).format('L') %></td>
-            <td><%= situacao[item.situacao_tarefa] %></td>       
-            <td><a href="/alterar?id=<%= item.id_tarefa %>">Editar</a></td>       
-            <!-- adicionar a opção de excluir a tarefa ( exclusão lógica) -->
+            <td><%= situacao[item.situacao_tarefa] %></td>
+            <td>
+                <a href="/alterar?id=<%= item.id_tarefa %>">Editar</a>
+                <% if (exibindoEscondidas) { %>
+                    <a href="/restaurar?id=<%= item.id_tarefa %>">Restaurar</a>
+                <% } else { %>
+                    <a href="/delete-soft?id=<%= item.id_tarefa %>">Esconder</a>
+                <% } %>
+                <a href="/delete?id=<%= item.id_tarefa %>">Excluir</a>
+            </td>
         </tr>
     <% 
         });

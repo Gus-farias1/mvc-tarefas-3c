@@ -12,17 +12,33 @@
     <h1><%= tituloPagina %></h1>
 
     <form action="/cadastro" method="post">
+        <% 
+            const erroGeral = erros && erros.geral ? erros.geral.msg : "";
+            const erroTarefa = erros && erros.tarefa ? erros.tarefa.msg : "";
+            const erroPrazo = erros && erros.prazo ? erros.prazo.msg : "";
+            const erroSituacao = erros && erros.situacao ? erros.situacao.msg : "";
+        %>
+        <% if (erroGeral) { %>
+            <p><%= erroGeral %></p>
+        <% } %>
+
         <input type="hidden" name="id" id="id" value="<%= tarefa.id_tarefa %>">
         <label for="tarefa">Tarefa:</label><br>
         <textarea name="tarefa" id="tarefa"><%= tarefa.nome_tarefa %></textarea> <br>
+        <% if (erroTarefa) { %>
+            <p><%= erroTarefa %></p>
+        <% } %>
 
         <label for="prazo">Prazo:</label><br>
         <input type="date" name="prazo" id="prazo" 
-        value="<%= moment(tarefa.prazo_tarefa).format("YYYY-MM-DD") %>"><br>
+        value="<%= tarefa.prazo_tarefa ? moment(tarefa.prazo_tarefa).format("YYYY-MM-DD") : "" %>"><br>
+        <% if (erroPrazo) { %>
+            <p><%= erroPrazo %></p>
+        <% } %>
 
         <label for="situacao">Situação:</label><br>
         <% 
-            let selecionado = ["","","","",""];
+            let selecionado = ["","","","","",""];
             selecionado[tarefa.situacao_tarefa] = "selected";
         %>
         <select name="situacao" id="situacao">
@@ -31,9 +47,18 @@
             <option <%= selecionado[2] %> value="2">Iniciada</option>
             <option <%= selecionado[3] %> value="3">Finalizada</option>
             <option <%= selecionado[4] %> value="4">Em Atraso</option>
+            <option <%= selecionado[5] %> value="5">Escondida</option>
         </select> <br>
-        <button type="submit">Salvar</button>
+        <% if (erroSituacao) { %>
+            <p><%= erroSituacao %></p>
+        <% } %>
 
+        <button type="button" onclick="window.location='/'">Cancelar</button>
+        <button type="submit">Salvar</button>
+        <% if (tarefa.id_tarefa) { %>
+            <button type="button" onclick="window.location='/delete-soft?id=<%= tarefa.id_tarefa %>'">Esconder</button>
+            <button type="button" onclick="window.location='/delete?id=<%= tarefa.id_tarefa %>'">Excluir</button>
+        <% } %>
     </form>
 
 

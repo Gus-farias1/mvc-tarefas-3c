@@ -1,114 +1,219 @@
 var express = require("express");
 var router = express.Router();
-//requisição do Model uso obrigatório de chaves e nome definido no objeto
-const {tarefasModel} = require("../models/tarefasModel");
+const { body, query, validationResult } = require("express-validator");
+const { tarefasModel } = require("../models/tarefasModel");
 const moment = require("moment");
-moment.locale('pt-br');
 
+moment.locale("pt-br");
 
+const tarefaVazia = {
+    id_tarefa: 0,
+    nome_tarefa: "",
+    prazo_tarefa: "",
+    situacao_tarefa: 1
+};
+
+const validarDataHojeOuFuturo = (value) => {
+    const dataInformada = new Date(`${value}T00:00:00`);
+
+    if (Number.isNaN(dataInformada.getTime())) {
+        return false;
+    }
+
+    const hoje = new Date();
+    hoje.setHours(0, 0, 0, 0);
+
+    return dataInformada >= hoje;
+};
+
+const montarTarefaFormulario = (bodyData = {}) => {
+    const id = Number.parseInt(bodyData.id, 10);
+    const situacao = Number.parseInt(bodyData.situacao, 10);
+
+    return {
+        id_tarefa: Number.isNaN(id) ? 0 : id,
+        nome_tarefa: bodyData.tarefa || "",
+        prazo_tarefa: bodyData.prazo || "",
+        situacao_tarefa: Number.isNaN(situacao) ? 1 : situacao
+    };
+};
+
+const renderFormulario = (res, tarefa, erros = {}, tituloPagina = "Nova Tarefa") => {
+    res.render("pages/cadastro", {
+        tituloAba: tituloPagina === "Nova Tarefa" ? "Cadastro de tarefa" : "Edição de tarefa",
+        tituloPagina,
+        tarefa,
+        erros
+    });
+};
+
+const validacaoCadastro = [
+    body("id")
+        .optional({ checkFalsy: true })
+        .isInt({ min: 0 })
+        .withMessage("O identificador da tarefa é inválido."),
+    body("tarefa")
+        .trim()
+        .isLength({ min: 5, max: 45 })
+        .withMessage("O nome da tarefa deve ter entre 5 e 45 caracteres."),
+    body("prazo")
+        .isISO8601({ strict: true, strictSeparator: true })
+        .withMessage("Informe uma data válida.")
+        .bail()
+        .custom(validarDataHojeOuFuturo)
+        .withMessage("O prazo deve ser hoje ou uma data futura."),
+    body("situacao")
+        .isInt({ min: 0, max: 5 })
+        .withMessage("A situação deve ser um número inteiro entre 0 e 5.")
+];
+
+const validacaoId = [
+    query("id")
+        .isInt({ min: 1 })
+        .withMessage("O identificador da tarefa é inválido.")
+];
+
+router.use((req, res, next) => {
+    res.locals.moment = moment;
+    next();
+});
 
 router.get("/", async function (req, res) {
-    res.locals.moment = moment;
-    try{
+    try {
         const linhas = await tarefasModel.findAll();
-        res.render("pages/index", {linhasTabela:linhas});
-    }catch(erro){
+        res.render("pages/index", {
+            linhasTabela: linhas,
+            tituloLista: "Lista de tarefas a fazer - 3C",
+            exibindoEscondidas: false
+        });
+    } catch (erro) {
         console.log(erro);
+        res.redirect("/");
     }
 });
 
-
-router.get("/cadastro", (req, res)=>{
-    res.locals.moment = moment;
-    res.render("pages/cadastro",{tituloAba:"Cadastro de tarefa",tituloPagina:"Nova Tarefa",
-        tarefa:{id_tarefa:0,nome_tarefa:"",prazo_tarefa:"",situacao_tarefa:1}
-    });
+router.get("/escondidas", async function (req, res) {
+    try {
+        const linhas = await tarefasModel.findHidden();
+        res.render("pages/index", {
+            linhasTabela: linhas,
+            tituloLista: "Tarefas escondidas - 3C",
+            exibindoEscondidas: true
+        });
+    } catch (erro) {
+        console.log(erro);
+        res.redirect("/");
+    }
 });
 
-router.get("/alterar", async (req, res)=>{
-    res.locals.moment = moment;
-    //recuperar o id da queryString
+router.get("/cadastro", (req, res) => {
+    renderFormulario(res, tarefaVazia);
+});
+
+router.get("/alterar", validacaoId, async (req, res) => {
+    const erros = validationResult(req);
+
+    if (!erros.isEmpty()) {
+        return res.redirect("/");
+    }
+
     const id = req.query.id;
-    try{
+
+    try {
         const tarefa = await tarefasModel.findById(id);
 
         if (Array.isArray(tarefa) && tarefa.length > 0) {
-            res.render("pages/cadastro",{tituloAba:"Edição de tarefa",tituloPagina:"Alterar Tarefa",
-                tarefa:tarefa[0]
-            });
-        } else {
-            res.redirect("/");
+            return renderFormulario(res, tarefa[0], {}, "Alterar Tarefa");
         }
-    }catch(erro){
+
+        res.redirect("/");
+    } catch (erro) {
         console.log(erro);
         res.redirect("/");
     }
 });
 
-router.post("/cadastro", async (req, res)=>{
-    // adicionar validação de dados com o express-validator
-    // nome - 5 a 45 caracteres
-    // prazo data válida e hoje ou no futuro
-    // situação - inteiro de 0 a 4 
+router.post("/cadastro", validacaoCadastro, async (req, res) => {
+    const erros = validationResult(req);
+    const tarefaFormulario = montarTarefaFormulario(req.body);
+    const tituloPagina = tarefaFormulario.id_tarefa > 0 ? "Alterar Tarefa" : "Nova Tarefa";
+
+    if (!erros.isEmpty()) {
+        return renderFormulario(res, tarefaFormulario, erros.mapped(), tituloPagina);
+    }
+
     const objJson = {
-        id: req.body.id,
-        nome:req.body.tarefa,
-        prazo:req.body.prazo,
-        situacao:req.body.situacao
-    }
-    try{
-        if(objJson.id == 0){
-            var result = await tarefasModel.create(objJson);
-        }else{
-            var result = await tarefasModel.update(objJson);
+        id: tarefaFormulario.id_tarefa,
+        nome: tarefaFormulario.nome_tarefa,
+        prazo: tarefaFormulario.prazo_tarefa,
+        situacao: tarefaFormulario.situacao_tarefa
+    };
+
+    try {
+        if (objJson.id === 0) {
+            await tarefasModel.create(objJson);
+        } else {
+            await tarefasModel.update(objJson);
         }
-        console.log(result);
+
         res.redirect("/");
-    }catch(erro){
-        console.log(erro)
-    }    
-});
-
-
-router.get("/teste-insert", async (req, res)=>{
-    const dadosInsert =  {
-            nome: "instalar o fortnite no Lab 1 Terreo",
-            prazo:"2026-03-19"
-            }
-    try{
-        const resultInsert = await tarefasModel.create(dadosInsert);
-        res.send(resultInsert)    
-    }catch(erro){
+    } catch (erro) {
         console.log(erro);
-    }
-
-});
-
-
-//delete físico - hard delete
-router.get("/teste-delete", async (req, res)=>{
-    let idTarefa = 17;
-    try{
-        res.send(resultDelete)    
-    }catch(erro){
-        console.log(erro);
+        renderFormulario(
+            res,
+            tarefaFormulario,
+            { geral: { msg: "Não foi possível salvar a tarefa." } },
+            tituloPagina
+        );
     }
 });
 
-//exercicio - teste de update -> delete lógico ou soft delete
-//delete lógico - soft delete
-router.get("/teste-soft-delete", async (req, res)=>{
-    let idTarefa = 15;
-    try{
-        res.send(resultUpdate);    
-    }catch(erro){
+router.get("/delete", validacaoId, async (req, res) => {
+    const erros = validationResult(req);
+
+    if (!erros.isEmpty()) {
+        return res.redirect("/");
+    }
+
+    try {
+        await tarefasModel.deleteFisico(req.query.id);
+        res.redirect("/");
+    } catch (erro) {
         console.log(erro);
+        res.redirect("/");
     }
 });
 
+router.get("/delete-soft", validacaoId, async (req, res) => {
+    const erros = validationResult(req);
 
+    if (!erros.isEmpty()) {
+        return res.redirect("/");
+    }
 
+    try {
+        await tarefasModel.deleteLogico(req.query.id);
+        res.redirect("/");
+    } catch (erro) {
+        console.log(erro);
+        res.redirect("/");
+    }
+});
 
+router.get("/restaurar", validacaoId, async (req, res) => {
+    const erros = validationResult(req);
 
+    if (!erros.isEmpty()) {
+        return res.redirect("/");
+    }
+
+    try {
+        await tarefasModel.restaurarLogico(req.query.id);
+        res.redirect("/escondidas");
+    } catch (erro) {
+        console.log(erro);
+        res.redirect("/escondidas");
+    }
+});
 
 module.exports = router;

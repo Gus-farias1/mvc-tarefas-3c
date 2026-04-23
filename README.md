@@ -1,6 +1,3 @@
-Express e EJS atualizados em fev/25
+npm install i
 
-1. Para adicionar as dependências, use:
-    ```bash
-    npm install --save
-    ```
+para instalar as dependencias
